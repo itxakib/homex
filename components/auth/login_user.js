@@ -1,20 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity,Image, StyleSheet, Animated, Easing, Alert, ActivityIndicator, SwitchComponent } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Animated, Easing, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Checkbox } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
-import { app, auth,db } from '../../integrations/firebase';
-import { getFirestore, collection, doc, setDoc } from 'firebase/firestore';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { GoogleSignin,isSuccessResponse,isErrorWithCode,statusCodes } from '@react-native-google-signin/google-signin';
-// Initialize Firebase services
-
+import { app, auth, db } from '../../integrations/firebase';
+import { getFirestore, collection, doc, setDoc, getDoc, query,where, getDocs } from 'firebase/firestore';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile,sendEmailVerification } from 'firebase/auth';
+import { GoogleSignin, isSuccessResponse, isErrorWithCode, statusCodes } from '@react-native-google-signin/google-signin';
+import { useDispatch } from 'react-redux';
+import { setUser } from '../../redux/userSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const COLORS = {
   blue: '#007BFF',
   lightBlue: '#D7EAFD',
   darkGray: '#4A4A4A',
   yellow: '#FFE680',
-  white: '#FFFFFF'
+  white: '#FFFFFF',
+  errorRed: '#FF3333'
 };
 
 const formConfig = {
@@ -42,95 +44,171 @@ const formConfig = {
 
 const AuthScreen = () => {
   const navigation = useNavigation();
+  const [ida,setida]=useState();
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({});
+  const [errors, setErrors] = useState({});
   const [checked, setChecked] = useState(false);
-  const [IsSubmitting,setIsSubmitting]=useState();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
 
   const currentForm = isLogin ? formConfig.login : formConfig.signup;
+ const dispatch=useDispatch();
+  const validateField = (id, value) => {
+    let error = '';
+    switch (id) {
+      case 'email':
+        if (!value.trim()) error = 'Email is required';
+        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = 'Invalid email format';
+        break;
+      case 'password':
+        if (!value) error = 'Password is required';
+        else if (value.length < 6) error = 'Password must be at least 6 characters';
+        else if (!/[A-Z]/.test(value)) error = 'Password must contain at least one capital letter';
+        break;
+      case 'name':
+        if (!value.trim()) error = 'Name is required';
+        else if (/\d/.test(value)) error = 'Name cannot contain numbers';
+        break;
+      case 'phone':
+        if (!value.trim()) error = 'Phone number is required';
+        else if (!/^\d+$/.test(value)) error = 'Phone number must contain only digits';
+        else if (value.length > 11) error = 'Phone number cannot exceed 11 digits';
+        break;
+    }
+    return error;
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    currentForm.fields.forEach(field => {
+      const error = validateField(field.id, formData[field.id] || '');
+      if (error) newErrors[field.id] = error;
+    });
+    if (!checked) newErrors.checkbox = 'Please accept the privacy policies';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (id, text) => {
+    setFormData({ ...formData, [id]: text });
+    setErrors({ ...errors, [id]: validateField(id, text) });
+  };
+
+  
+
 
   const handleAuth = async () => {
+  if (!validateForm()) return;
+
+  try {
+    setIsLoading(true);
+
+    if (isLogin) {
+      // ✅ Login flow
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      // check email verification
+      if (!userCredential.user.emailVerified) {
+        await auth.signOut(); // force signout if not verified
+        setErrors({
+          general: 'Please verify your email before logging in.'
+        });
+        setIsLoading(false);
+        return;
+      }
     try {
-      setIsLoading(true);
-      
-      // Validate required fields
-      if (!formData.email?.trim() || !formData.password?.trim()) {
-        throw new Error('Please fill in all required fields');
-      }
+  const q = query(
+    collection(db, "users"),
+    where("email", "==", formData.email) // correct usage
+  );
 
-      if (!isLogin && (!formData.name?.trim() || !formData.phone?.trim())) {
-        throw new Error('Please fill in all required fields');
-      }
+  const querySnapshot = await getDocs(q);
 
-      if (!checked) {
-        throw new Error('Please accept the privacy policies');
-      }
+  if (!querySnapshot.empty) {
+    const userDoc = querySnapshot.docs[0];
+    
+    // first matching doc
+    dispatch(setUser(userDoc.data()))
+    
 
-      if (isLogin) {
-        // Sign in existing user
-        await signInWithEmailAndPassword(auth, formData.email, formData.password);
-        Alert.alert('Success', 'Logged in successfully!', [
-          { text: 'OK', onPress: () => navigation.navigate('tab_navigation') }
-        ]);
-      } else {
-        // Create new user
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          formData.email,
-          formData.password
-        );
+    console.log("Simple login user data:", userDoc.data());
+    // dispatch(setUser(userData)); // optional
+  } else {
+    console.log("No user found with that email");
+  }
+} catch (error) {
+  console.error("Error getting user by email:", error);
+}
+    
+      navigation.navigate('tab_navigation');
+    } else {
+      // ✅ Signup flow
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
 
-        // Update user profile with name
-        await updateProfile(userCredential.user, {
-          displayName: formData.name
-        });
+      await updateProfile(userCredential.user, {
+        displayName: formData.name
+      });
 
-        // Save additional user data to Firestore
-        await setDoc(doc(db, 'users', userCredential.user.uid), {
-          uid: userCredential.user.uid,
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          createdAt: new Date().toISOString()
-        });
+      // Save user in Firestore
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        uid: userCredential.user.uid,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        createdAt: new Date().toISOString()
+      });
 
-        Alert.alert('Success', 'Account created successfully!', [
-          { text: 'OK', onPress: ()=>setIsLogin(true) }
-        ]);
-      }
-    } catch (error) {
-      handleAuthError(error);
-    } finally {
-      setIsLoading(false);
+      // ✅ Send email verification
+      await sendEmailVerification(userCredential.user);
+
+      setErrors({
+        general: 'Verification email sent. Please check your inbox before logging in.'
+      });
+
+      // switch back to login form
+      setIsLogin(true);
+      setFormData({});
     }
-  };
-
-  const handleAuthError = (error) => {
-    let message = 'An error occurred. Please try again.';
+  } catch (error) {
+    const newErrors = {};
     switch (error.code) {
       case 'auth/email-already-in-use':
-        message = 'Email is already in use!';
+        newErrors.email = 'Email is already in use';
         break;
       case 'auth/invalid-email':
-        message = 'Invalid email address!';
+        newErrors.email = 'Invalid email address';
         break;
       case 'auth/weak-password':
-        message = 'Password should be at least 6 characters!';
+        newErrors.password = 'Password should be at least 6 characters';
         break;
       case 'auth/user-not-found':
-        message = 'User not found!';
+        newErrors.email = 'User not found';
         break;
       case 'auth/wrong-password':
-        message = 'Invalid password!';
+        newErrors.password = 'Invalid password';
         break;
       default:
-        message = error.message || message;
+        newErrors.general = error.message || 'An error occurred. Please try again.';
     }
-    Alert.alert('Error', message);
-  };
+    setErrors(newErrors);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
+  
 
   const handleSwitch = () => {
     Animated.sequence([
@@ -146,7 +224,11 @@ const AuthScreen = () => {
         easing: Easing.inOut(Easing.ease),
         useNativeDriver: true
       })
-    ]).start(() => setIsLogin(!isLogin));
+    ]).start(() => {
+      setIsLogin(!isLogin);
+      setFormData({});
+      setErrors({});
+    });
   };
 
   const handleButtonPress = () => {
@@ -160,161 +242,224 @@ const AuthScreen = () => {
     inputRange: [0, 1],
     outputRange: [0, -50]
   });
-  useEffect(()=>{
+
+  useEffect(() => {
     GoogleSignin.configure({
-      iosClientId:'655253277613-9fn6fndd5nbjj821jidrst22j0qtrfr2.apps.googleusercontent.com',
-      webClientId:'655253277613-vfvhbus2bmjuds27vgn7qfhikjau8kc8.apps.googleusercontent.com',
-      profileImageSize:150,
+      iosClientId: '655253277613-9fn6fndd5nbjj821jidrst22j0qtrfr2.apps.googleusercontent.com',
+      webClientId: '655253277613-vfvhbus2bmjuds27vgn7qfhikjau8kc8.apps.googleusercontent.com',
+      profileImageSize: 150,
       prompt: 'select_account',
-    })
-    
-  })
-  const handleGoogleSignin=async()=>{
-    try{
-      setIsSubmitting(true)
-      await GoogleSignin.signOut();
+    });
+  }, []);
 
-      await GoogleSignin.hasPlayServices();
-      const response=await GoogleSignin.signIn(
-        {
-          prompt: 'select_account', // Add this option to force account selection
-        }
-      );
-      if(isSuccessResponse(response)){
-        const {idToken,user}=response.data;
-        const {name,email,photo}=user;
-        console.log('it is a success',idToken)
-        navigation.navigate('tab_navigation')
-
-      }
-      else{
-        Alert('Google Sign in was cancelled')
-      }
-
-      setIsSubmitting(false)
-
-
-    }
-    catch(error){
-      if(isErrorWithCode(error)){
-        switch(error.code){
-          case statusCodes.IN_PROGRESS:
-            Alert('Googlle sin in is in progress')
-            break;
-          case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
-            Alert('Google play services isno t avaible')
-            break;
-          default:
-            Alert(error.code)
-
-        }
-      }
-      else{
-        Alert("An error occured")
-      }
-      setIsSubmitting(false)
-
-    }
-
-  }
   
-  return (
-    <View style={styles.container}>
-     <View style={styles.logoContainer}>
-  <Image
-    source={require('../../assets/homexlogo.png')}
-    style={styles.logo}
-    resizeMode="contain"
-  />
-</View>
-<Text style={[styles.title, !isLogin && styles.signupTitle]}>
-  {isLogin ? 'Welcome Back!' : 'Join Us! 👋'}
-</Text>
+  const handleGoogleSignin = async () => {
+  try {
+    setIsSubmitting(true);
+    await GoogleSignin.signOut();
+    await GoogleSignin.hasPlayServices();
+    const response = await GoogleSignin.signIn({
+      prompt: 'select_account',
+    });
+    if (isSuccessResponse(response)) {
+      console.log('respponse',response)
+      const id = response.data.user.id; 
+      console.log(id,'simple id of google')
+   if (isSuccessResponse(response)) {
+  console.log('response', response);
+  const userdata=response.data.user;
+  await setDoc(doc(db,'users',userdata.id),{
+   uid:userdata.id,
+   name:userdata.name,
+   email:userdata.email,
+   phone:userdata.phone ? userdata.phone:null,
+   photo:userdata.photo
 
-      <Animated.View style={{ transform: [{ translateX }] }}>
-        {currentForm.fields.map((field) => (
-          <Animated.View key={field.id} style={styles.inputContainer}>
-            <Ionicons name={field.icon} size={20} color={COLORS.blue} />
-            <TextInput
-              style={styles.input}
-              placeholder={field.placeholder}
-              placeholderTextColor="#999"
-              secureTextEntry={field.secure}
-              keyboardType={field.keyboardType}
-              onChangeText={(text) => setFormData({ ...formData, [field.id]: text })}
-              value={formData[field.id] || ''}
-            />
-          </Animated.View>
-        ))}
-      </Animated.View>
+  })
 
-      <View style={styles.checkboxContainer}>
-        <Checkbox
-          status={checked ? 'checked' : 'unchecked'}
-          onPress={() => setChecked(!checked)}
-          color={COLORS.blue}
-        />
-        <Text style={styles.checkboxLabel}>
-          By continuing you agree with our{' '}
-          <Text style={styles.link} onPress={() => console.log('Privacy Policy')}>
-            Privacy Policies
-          </Text>
-        </Text>
-      </View>
+  const id = response.data.user.id;
+  setida(id)
 
-      <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-        <TouchableOpacity
-          style={[
-            styles.button, 
-            { 
-              backgroundColor: currentForm.button.color,
-              opacity: isLoading ? 0.7 : 1
-            }
-          ]}
-          onPressIn={handleButtonPress}
-          onPress={handleAuth}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <Text style={styles.buttonText}>{currentForm.button.text}</Text>
-          )}
-        </TouchableOpacity>
-      </Animated.View>
+ try {
+  // Save to AsyncStorage
+  await AsyncStorage.setItem('userid', id);
 
-      <View style={styles.orDivider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.orText}>OR</Text>
-        <View style={styles.dividerLine} />
-      </View>
+  // Retrieve to verify
+const idaa = await AsyncStorage.getItem('userid');
+setida(idaa)
+  console.log(idaa, 'id from AsyncStorage');
+  const userdatafromdb=await getDoc(doc(db,'users',id))
+  console.log(userdatafromdb.data());
+if (userdatafromdb.exists()) {
+   
+   const snap=userdatafromdb.data();
+    dispatch(setUser(snap));
 
-      <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignin} 
-      disabled={IsSubmitting}>
-        <Ionicons name="logo-google" size={20} color={COLORS.blue} />
-        <Text style={styles.googleText}>Continue with Google</Text>
-      </TouchableOpacity>
+    console.log("Dispatched user data:", snap);
 
-      <TouchableOpacity onPress={handleSwitch} style={styles.switch}>
-        <Text style={styles.switchText}>
-          {currentForm.switchText}
-          <Text style={styles.link}>{currentForm.switchLink}</Text>
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
+} 
+}
+catch (e) {
+  console.log("Redux dispatch error:", e);
+}
+
+
+      
+      navigation.navigate('tab_navigation');
+    } else {
+      setErrors({ ...errors, general: 'Google Sign in was cancelled' });
+    }
+  }
+} catch (error) {
+    let message = 'An error occurred';
+    if (isErrorWithCode(error)) {
+      switch (error.code) {
+        case statusCodes.IN_PROGRESS:
+          message = 'Google sign in is in progress';
+          break;
+        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+          message = 'Google Play Services is not available';
+          break;
+        default:
+          message = error.code;
+      }
+    }
+    setErrors({ ...errors, general: message });
+  } finally {
+    setIsSubmitting(false);
+  }
 };
 
-// Styles remain the same as in your original code
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.logoContainer}>
+          {isLogin && (
+            <Image
+              source={require('../../assets/homexlogo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+        <Text style={[styles.title, !isLogin && styles.signupTitle]}>
+          {isLogin ? 'Welcome Back!' : 'Join Us! 👋'}
+        </Text>
 
+        {errors.general && (
+          <Text style={styles.errorText}>{errors.general}</Text>
+        )}
 
+        <Animated.View style={{ transform: [{ translateX }] }}>
+          {currentForm.fields.map((field) => (
+            <View key={field.id}>
+              <Animated.View style={[
+                styles.inputContainer,
+                errors[field.id] && styles.inputContainerError
+              ]}>
+                <Ionicons
+                  name={field.icon}
+                  size={20}
+                  color={errors[field.id] ? COLORS.errorRed : COLORS.blue}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder={field.placeholder}
+                  placeholderTextColor="#999"
+                  secureTextEntry={field.secure}
+                  keyboardType={field.keyboardType}
+                  onChangeText={(text) => handleInputChange(field.id, text)}
+                  value={formData[field.id] || ''}
+                />
+              </Animated.View>
+              {errors[field.id] && (
+                <Text style={styles.errorText}>{errors[field.id]}</Text>
+              )}
+            </View>
+          ))}
+        </Animated.View>
+
+        <View style={styles.checkboxContainer}>
+          <Checkbox
+            status={checked ? 'checked' : 'unchecked'}
+            onPress={() => {
+              setChecked(!checked);
+              setErrors({ ...errors, checkbox: !checked ? '' : 'Please accept the privacy policies' });
+            }}
+            color={errors.checkbox ? COLORS.errorRed : COLORS.blue}
+          />
+          <Text style={styles.checkboxLabel}>
+            By continuing you agree with our{' '}
+            <Text style={styles.link} onPress={() => console.log('Privacy Policy')}>
+              Privacy Policies
+            </Text>
+          </Text>
+        </View>
+        {errors.checkbox && (
+          <Text style={styles.errorText}>{errors.checkbox}</Text>
+        )}
+
+        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              {
+                backgroundColor: currentForm.button.color,
+                opacity: isLoading ? 0.7 : 1
+              }
+            ]}
+            onPressIn={handleButtonPress}
+            onPress={handleAuth}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color={COLORS.white} />
+            ) : (
+              <Text style={styles.buttonText}>{currentForm.button.text}</Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        <View style={styles.orDivider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.orText}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={handleGoogleSignin}
+          disabled={isSubmitting}
+        >
+          <Ionicons name="logo-google" size={20} color={COLORS.blue} />
+          <Text style={styles.googleText}>Continue with Google</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleSwitch} style={styles.switch}>
+          <Text style={styles.switchText}>
+            {currentForm.switchText}
+            <Text style={styles.link}>{currentForm.switchLink}</Text>
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 25,
     backgroundColor: COLORS.lightBlue,
-    justifyContent: 'center'
+  },
+  scrollContent: {
+    padding: 25,
+    paddingBottom: 100, // Extra padding for scrollable content
   },
   logoContainer: {
     alignItems: 'center',
@@ -326,10 +471,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   title: {
-    fontSize: 28,  // Reduced from 32
+    fontSize: 28,
     fontWeight: 'bold',
     color: COLORS.darkGray,
-    marginBottom: 30,  // Reduced from 40
+    marginBottom: 20,
     textAlign: 'center',
     marginTop: 10,
   },
@@ -342,12 +487,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 15,
     padding: 10,
-    marginVertical: 10,
+    marginVertical: 8,
     elevation: 2,
     shadowColor: COLORS.darkGray,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: 'transparent'
+  },
+  inputContainerError: {
+    borderColor: COLORS.errorRed
   },
   input: {
     flex: 1,
@@ -359,7 +509,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 15,
     alignItems: 'center',
-    marginVertical: 20
+    marginVertical: 15
   },
   buttonText: {
     color: COLORS.white,
@@ -374,7 +524,8 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: COLORS.blue
+    borderColor: COLORS.blue,
+    marginVertical: 10
   },
   googleText: {
     marginLeft: 10,
@@ -382,7 +533,7 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   switch: {
-    marginTop: 20,
+    marginTop: 15,
     alignSelf: 'center'
   },
   switchText: {
@@ -405,7 +556,7 @@ const styles = StyleSheet.create({
   orDivider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20
+    marginVertical: 15
   },
   dividerLine: {
     flex: 1,
@@ -417,6 +568,12 @@ const styles = StyleSheet.create({
     color: COLORS.darkGray,
     marginHorizontal: 10,
     fontWeight: '500'
+  },
+  errorText: {
+    color: COLORS.errorRed,
+    fontSize: 12,
+    marginLeft: 10,
+    marginBottom: 5
   }
 });
 

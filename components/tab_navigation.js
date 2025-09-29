@@ -7,11 +7,17 @@ import Profile from './profile';
 import Messages from './messages';
 import Bookings from './bookings';
 import { Dimensions, View } from 'react-native';
+import { useSelector } from 'react-redux';
 const Tab = createBottomTabNavigator();
 const { width, height } = Dimensions.get('window');
-const TabNavigation = () => (
+
+const TabNavigation = () => {
+const get = useSelector((state) => state.users);   // ✅ correct key
+console.log(get, "user id from redux");
+
+  return(
   <Tab.Navigator
-    initialRouteName="Profile"
+    initialRouteName="Home"
     screenOptions={{
       headerShown: false,
       tabBarActiveTintColor: COLORS.blue,
@@ -88,7 +94,8 @@ const TabNavigation = () => (
       }}
     />
   </Tab.Navigator>
-);
+  )
+};
 
 const styles = {
   createButton: {

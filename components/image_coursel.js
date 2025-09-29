@@ -15,16 +15,9 @@ const COLORS = {
 };
 
 const onboardingData = [
+
   {
     id: '1',
-    image: require('../assets/tutor.png'),
-    title: 'Expert Tutors',
-    subtitle: 'Personalized Learning',
-    description: 'Connect with qualified tutors for one-on-one sessions in various subjects',
-    color: COLORS.blue,
-  },
-  {
-    id: '2',
     image: require('../assets/plumber.jpg'),
     title: 'Skilled Professionals',
     subtitle: 'Home Services Made Easy',
@@ -32,11 +25,19 @@ const onboardingData = [
     color: COLORS.blue,
   },
   {
-    id: '3',
+    id: '2',
     image: require('../assets/event.png'),
     title: 'Event Specialists',
     subtitle: 'Memorable Experiences',
     description: 'Plan your perfect event with our expert coordinators and vendors',
+    color: COLORS.blue,
+  },
+  {
+    id: '3',
+    image: require('../assets/tutor.png'),
+    title: 'Expert Tutors',
+    subtitle: 'Personalized Learning',
+    description: 'Connect with qualified tutors for one-on-one sessions in various subjects',
     color: COLORS.blue,
   },
 ];

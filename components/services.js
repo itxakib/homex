@@ -1,18 +1,19 @@
-import React from 'react';
-import { View, ScrollView, Text, TouchableOpacity, StyleSheet, Image, FlatList } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, ScrollView, Text, TouchableOpacity, StyleSheet, Image, FlatList, Dimensions } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import DynamicCard from './Dynamiccards'; // Your existing carousel component
 import { COLORS } from './colors';
-import DynamicCoursel from './dynamiccoursel';
 import { TextInput } from 'react-native-paper';
+
+const { width: screenWidth } = Dimensions.get('window');
+const bannerWidth = screenWidth - 40; // 20px padding on each side
 
 // Mock data - replace with your actual data source
 const services = [
-  { id: 1, title: 'Electrical Repairs', icon: 'electrical-services', rating: 4.9, price: '50+', category: 'Home Services' ,  color:'yellow' },
-  { id: 2, title: 'Plumbing', icon: 'plumbing', rating: 4.8, price: '45+', category: 'Home Services',color:COLORS.lightBlue },
-  { id: 3, title: 'AC Maintenance', icon: 'ac-unit', rating: 4.7, price: '60+', category: 'Home Services',color:COLORS.blue },
-  { id: 4, title: 'Carpentry', icon: 'carpenter', rating: 4.6, price: '55+', category: 'Home Services',color:'brown' },
+  { id: 1, title: 'Electrical Repairs', icon: 'electrical-services', rating: 4.9, price: 'RS 1000', category: 'Home Services', color: COLORS.blue },
+  { id: 2, title: 'Plumbing', icon: 'plumbing', rating: 4.8, price: 'RS 1000', category: 'Home Services', color: COLORS.lightBlue },
+  { id: 3, title: 'AC Maintenance', icon: 'ac-unit', rating: 4.7, price: 'RS 1000', category: 'Home Services', color: COLORS.blue },
+  { id: 4, title: 'Carpentry', icon: 'carpenter', rating: 4.6, price: 'RS 1000', category: 'Home Services', color: 'brown' },
 ];
 
 const topProviders = [
@@ -21,10 +22,107 @@ const topProviders = [
   { id: 3, name: 'Ahmed AC Expert', rating: 4.7, jobs: 200, image: require('../assets/electrican.jpg') },
 ];
 
+// Custom Banner Carousel Component
+const ServiceBannerCarousel = ({ data, onServicePress }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const flatListRef = useRef(null);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (viewableItems.length > 0) {
+      setCurrentIndex(viewableItems[0].index);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({
+    itemVisiblePercentThreshold: 50,
+  }).current;
+
+  const renderBannerItem = ({ item, index }) => (
+    <TouchableOpacity 
+      style={styles.bannerContainer}
+      onPress={() => onServicePress(item)}
+    >
+      <LinearGradient
+        colors={[item.color || COLORS.blue, item.color === 'yellow' ? '#FFA500' : COLORS.lightBlue]}
+        style={styles.bannerGradient}
+        start={[0, 0]}
+        end={[1, 1]}
+      >
+        <View style={styles.bannerContent}>
+          <View style={styles.bannerLeft}>
+            <Text style={styles.bannerCategory}>{item.category}</Text>
+            <Text style={styles.bannerTitle}>{item.title}</Text>
+            <View style={styles.bannerDetails}>
+              <View style={styles.ratingBadge}>
+                <Ionicons name="star" size={14} color="#FFD700" />
+                <Text style={styles.bannerRating}>{item.rating}</Text>
+              </View>
+              <Text style={styles.bannerPrice}>From {item.price}</Text>
+            </View>
+            <TouchableOpacity style={styles.bookNowButton}>
+              <Text style={styles.bookNowText}>Book Now</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.white} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.bannerRight}>
+            <View style={styles.iconContainer}>
+              <MaterialIcons 
+                name={item.icon} 
+                size={50} 
+                color={COLORS.white}
+              />
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  const renderDots = () => (
+    <View style={styles.dotsContainer}>
+      {data.map((_, index) => (
+        <View
+          key={index}
+          style={[
+            styles.dot,
+            { opacity: index === currentIndex ? 1 : 0.3 }
+          ]}
+        />
+      ))}
+    </View>
+  );
+
+  return (
+    <View>
+      <FlatList
+        ref={flatListRef}
+        data={data}
+        renderItem={renderBannerItem}
+        keyExtractor={(item) => item.id.toString()}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        snapToInterval={bannerWidth + 10}
+        decelerationRate="fast"
+        contentContainerStyle={styles.carouselContainer}
+      />
+      {renderDots()}
+    </View>
+  );
+};
+
 const Service = () => {
+  const handleServicePress = (service) => {
+    console.log('Service selected:', service);
+    // Add your navigation or service selection logic here
+  };
+
   return (
     <View style={styles.container}>
-      {/* Hero Section with Carousel */}
+      {/* Hero Section with Search */}
       <LinearGradient
         colors={[COLORS.blue, COLORS.lightBlue]}
         style={styles.hero}
@@ -58,11 +156,11 @@ const Service = () => {
             horizontal
             data={services}
             renderItem={({ item }) => (
-                <TouchableOpacity style={styles.categoryCard}>
+              <TouchableOpacity style={styles.categoryCard}>
                 <MaterialIcons 
                   name={item.icon} 
                   size={32} 
-                  color={item.color}  // Changed from COLORS.blue
+                  color={item.color}
                 />
                 <Text style={styles.categoryTitle}>{item.title}</Text>
               </TouchableOpacity>
@@ -72,7 +170,7 @@ const Service = () => {
           />
         </View>
 
-        {/* Featured Services Carousel */}
+        {/* Recommended Services Banner Carousel */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recommended Services</Text>
@@ -81,15 +179,9 @@ const Service = () => {
             </TouchableOpacity>
           </View>
           
-          <DynamicCoursel
+          <ServiceBannerCarousel 
             data={services}
-            renderItem={({ item }) => (
-              <DynamicCard 
-                item={item}
-                style={styles.serviceCard}
-                onPress={() => console.log('Service selected:', item.id)}
-              />
-            )}
+            onServicePress={handleServicePress}
           />
         </View>
 
@@ -189,7 +281,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     marginLeft: 10,
     fontSize: 16,
-   
   },
   content: {
     paddingVertical: 20,
@@ -225,13 +316,118 @@ const styles = StyleSheet.create({
   categoryTitle: {
     marginTop: 10,
     fontSize: 14,
-    color: COLORS.darkGray,  // Ensure this matches home screen
+    color: COLORS.darkGray,
     textAlign: 'center',
   },
-  serviceCard: {
-    marginHorizontal: 10,
-    width: 280,
+  
+  // Banner Carousel Styles
+  carouselContainer: {
+    paddingLeft: 20,
   },
+  bannerContainer: {
+    width: bannerWidth,
+    marginRight: 10,
+  },
+  bannerGradient: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    padding: 20,
+    minHeight: 140,
+  },
+  bannerLeft: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  bannerCategory: {
+    fontSize: 12,
+    color: COLORS.white,
+    opacity: 0.8,
+    marginBottom: 5,
+    textTransform: 'uppercase',
+    fontWeight: '500',
+  },
+  bannerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    marginBottom: 10,
+  },
+  bannerDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 10,
+  },
+  bannerRating: {
+    color: COLORS.white,
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  bannerPrice: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  bookNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  bookNowText: {
+    color: COLORS.white,
+    fontWeight: '600',
+    marginRight: 5,
+  },
+  bannerRight: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  iconContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 40,
+    padding: 15,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 15,
+    paddingHorizontal: 20,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.blue,
+    marginHorizontal: 4,
+  },
+
+  // Provider and Steps styles (unchanged)
   providerCard: {
     backgroundColor: COLORS.white,
     borderRadius: 15,

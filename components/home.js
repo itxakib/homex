@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DynamicCoursel from './dynamiccoursel';
 import { ServiceProviderData } from './serviceproviders_data';
 import DynamicCard from './Dynamiccards';
+import { useSelector } from 'react-redux';
 
 const { width } = Dimensions.get('window');
 const numColumns = width < 375 ? 3 : 4;
@@ -52,10 +53,23 @@ const categoryColors = [
   COLORS.accentOrange
 ];
 
-const Home = () => {
+const Home = ({navigation}) => {
   const [selectedService, setSelectedService] = useState('Electrician');
   const [scrollY] = useState(new Animated.Value(0));
+  const [userdata,setuserdata]=useState();
   const [activeIndex, setActiveIndex] = useState(0);
+const getdata=useSelector((state)=>state.users);
+  console.log(getdata,'data for home page redux data')
+  
+  useEffect(() => {
+    
+    if (getdata) {
+      setuserdata(getdata);
+    }
+  },[]);
+
+
+
   
   // Updated categories with vibrant colors
   const categories = [
@@ -209,7 +223,7 @@ const Home = () => {
             <View style={styles.headerTop}>
               <View>
                 <Text style={styles.welcomeText}>Welcome back,</Text>
-                <Text style={styles.greeting}>Aqib!</Text>
+                <Text style={styles.greeting}>{userdata?.name || "Guest"}</Text>
               </View>
               <View style={styles.headerRightButtons}>
                 <TouchableOpacity style={styles.iconButton}>
@@ -217,10 +231,15 @@ const Home = () => {
                   <View style={styles.notificationBadge} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.avatarContainer}>
-                  <Image 
-                    source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} 
-                    style={styles.avatar}
-                  />
+                <Image 
+  source={{ 
+    uri: userdata?.photo 
+      ? userdata.photo 
+      : 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQfVuGdiPJQRi4thppytG_8zWv9UgS0MCvgiQ&s' 
+  }} 
+  style={styles.avatar}
+/>
+
                 </TouchableOpacity>
               </View>
             </View>
@@ -263,7 +282,11 @@ const Home = () => {
           
           <View style={styles.categoryGridContainer}>
             {categories.slice(0, 8).map((item, index) => (
-              <TouchableOpacity key={item.id} style={styles.categoryCard}>
+              <TouchableOpacity key={item.id} style={styles.categoryCard}
+               onPress={() => navigation.navigate('CategoryScreen', { 
+    category:item
+  })}
+              >
                 <View style={[styles.categoryIconContainer, { backgroundColor: `${item.color}20` }]}>
                   <MaterialCommunityIcons 
                     name={item.icon} 
@@ -314,31 +337,48 @@ const Home = () => {
             ))}
           </ScrollView>
 
-          {/* Service Providers List */}
+          {/* Enhanced Service Providers List */}
           {filteredProviders.length > 0 ? (
             <View style={styles.providersContainer}>
               {filteredProviders.map((item) => (
-                <TouchableOpacity key={item.id} style={styles.providerCard}>
-                  <Image 
-                    source={item.image || { uri: 'https://randomuser.me/api/portraits/men/' + (Math.floor(Math.random() * 50) + 1) + '.jpg' }}
-                    style={styles.providerImage}
-                  />
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={styles.providerCard}
+                  onPress={() => navigation.navigate('ServiceProviderDetail', { provider: item })}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.providerImageContainer}>
+                    <Image 
+                      source={item.image || { uri: 'https://randomuser.me/api/portraits/men/' + (Math.floor(Math.random() * 50) + 1) + '.jpg' }}
+                      style={styles.providerImage}
+                    />
+                    <View style={styles.verifiedBadge}>
+                      <MaterialCommunityIcons name="check-circle" size={16} color={COLORS.accentGreen} />
+                    </View>
+                  </View>
+
                   <View style={styles.providerDetails}>
-                    <View style={styles.providerNameRow}>
-                      <Text style={styles.providerName}>{item.name}</Text>
+                    <View style={styles.providerHeader}>
+                      <Text style={styles.providerName} numberOfLines={1}>{item.name}</Text>
                       <View style={styles.ratingContainer}>
-                        <MaterialCommunityIcons name="star" size={16} color={COLORS.yellow} />
+                        <MaterialCommunityIcons name="star" size={14} color={COLORS.accentYellow} />
                         <Text style={styles.ratingText}>{item.rating}</Text>
                       </View>
                     </View>
-                    <Text style={styles.providerCategory}>{item.category}</Text>
-                    <View style={styles.providerInfoRow}>
-                      <Text style={styles.providerPrice}>{item.price}</Text>
-                      <Text style={styles.providerExperience}>{item.experience} experience</Text>
+
+                    <Text style={styles.providerCategory} numberOfLines={1}>{item.category}</Text>
+                    <Text style={styles.providerExperience} numberOfLines={1}>{item.experience} experience</Text>
+                    
+                    <View style={styles.providerFooter}>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.priceLabel}>Starting from</Text>
+                        <Text style={styles.providerPrice}>{item.price}</Text>
+                      </View>
+                      <TouchableOpacity style={styles.bookButton} onPress={()=>navigation.navigate('ServiceProviderDetail',{provider:item})}>
+                        <Text style={styles.bookButtonText}>Book</Text>
+                        <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.white} />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={styles.bookButton}>
-                      <Text style={styles.bookButtonText}>Book Now</Text>
-                    </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -357,6 +397,9 @@ const Home = () => {
     </View>
   );
 };
+
+
+export default Home
 
 const styles = StyleSheet.create({
   container: {
@@ -607,37 +650,58 @@ const styles = StyleSheet.create({
     color: COLORS.white,
   },
   
-  // Provider Card Styles
+  // Enhanced Provider Card Styles
   providersContainer: {
     paddingHorizontal: 20,
   },
   providerCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 16,
-    flexDirection: 'row',
     padding: 16,
-    elevation: 3,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    minHeight: 140, // Ensures consistent height
+  },
+  providerImageContainer: {
+    position: 'relative',
+    alignSelf: 'flex-start',
+    marginBottom: 12,
   },
   providerImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    marginRight: 16,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 2,
+    borderColor: COLORS.lightBlue,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: 2,
+    elevation: 2,
   },
   providerDetails: {
     flex: 1,
   },
-  providerNameRow: {
+  providerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
   providerName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.darkGray,
+    flex: 1,
+    marginRight: 10,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -651,37 +715,54 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '600',
     color: COLORS.darkGray,
+    fontSize: 12,
   },
   providerCategory: {
+    color: COLORS.blue,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  providerExperience: {
     color: COLORS.darkGray,
     opacity: 0.7,
-    marginBottom: 8,
+    fontSize: 13,
+    marginBottom: 12,
   },
-  providerInfoRow: {
+  providerFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginTop: 'auto', // Pushes to bottom
+  },
+  priceContainer: {
+    flex: 1,
+  },
+  priceLabel: {
+    fontSize: 11,
+    color: COLORS.darkGray,
+    opacity: 0.7,
+    marginBottom: 2,
   },
   providerPrice: {
     fontWeight: 'bold',
     color: COLORS.blue,
     fontSize: 16,
   },
-  providerExperience: {
-    color: COLORS.darkGray,
-    opacity: 0.7,
-    fontSize: 14,
-  },
   bookButton: {
     backgroundColor: COLORS.blue,
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    elevation: 2,
   },
   bookButtonText: {
     color: COLORS.white,
     fontWeight: '600',
+    fontSize: 14,
+    marginRight: 4,
   },
   
   // Empty State Styles
@@ -709,5 +790,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
-export default Home;

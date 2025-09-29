@@ -9,7 +9,7 @@ const SplashScreen = () => {
         <Image
           source={require('../assets/splash_image_homex.png')}
           style={styles.splashImage}
-          resizeMode="cover" // optional
+          resizeMode="cover" 
         />
       </View>
     </SafeAreaView>

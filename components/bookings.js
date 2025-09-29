@@ -118,7 +118,7 @@ const Bookings = () => {
           <View style={{ width: 24 }} /> {/* Spacer */}
         </View>
 
-        {/* Segmented Control */}
+  
         <View style={styles.segmentContainer}>
           <TouchableOpacity
             style={[
@@ -155,7 +155,6 @@ const Bookings = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Bookings List */}
         <FlatList
           data={filteredBookings}
           renderItem={renderBookingItem}

@@ -9,18 +9,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.aqibnewpass.homex",
-      "infoPlist": {
-        "NSCameraUsageDescription": "This app needs camera access to capture CNIC images."
-      }
+      "bundleIdentifier": "com.aqibnewpass.homex"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0b0f2b"
       },
-      "package": "com.aqibnewpass.homex",
-      "permissions": ["android.permission.CAMERA"]
+      "package": "com.aqibnewpass.homex"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,17 +30,23 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontencom.googleusercontent.apps.655253277613-9fn6fndd5nbjj821jidrst22j0qtrfr2"
+          "iosUrlScheme": "com.googleusercontent.apps.655253277613-9fn6fndd5nbjj821jidrst22j0qtrfr2"
         }
       ],
-      "react-native-vision-camera",
       [
         "expo-camera",
         {
           "cameraPermission": "This app needs camera access to capture CNIC images."
         }
       ],
-      "expo-dev-client"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Homex to access your location."
+        }
+      ],
+      "expo-dev-client",
+      "expo-font"
     ]
   }
 }
